@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indian Stock Market ORB Scanner & Trade Command Center</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --panel-bg: #1e293b;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --accent-blue: #3b82f6;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        
+        /* Header & Market Breadth */
+        header { background: var(--panel-bg); border-bottom: 1px solid var(--border-color); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 1.2rem; font-weight: bold; color: var(--accent-blue); display: flex; align-items: center; gap: 8px; }
+        .breadth-bar { display: flex; align-items: center; gap: 15px; font-size: 0.85rem; background: rgba(0,0,0,0.2); padding: 6px 12px; border-radius: 6px; }
+        .advances { color: var(--accent-green); font-weight: bold; }
+        .declines { color: var(--accent-red); font-weight: bold; }
+
+        /* Main Grid Layout */
+        .container { display: grid; grid-template-columns: 320px 1fr 340px; height: calc(100vh - 55px); }
+        
+        /* Panel Styles */
+        .panel { background: var(--panel-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; }
+        .panel-header { padding: 12px; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; }
+        .panel-content { flex: 1; overflow-y: auto; padding: 10px; }
+
+        /* Watchlist & Scanner Items */
+        .select-group { margin-bottom: 10px; }
+        select { width: 100%; padding: 8px; background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; outline: none; }
+        .stock-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); margin-bottom: 6px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
+        .stock-item:hover, .stock-item.active { background: rgba(59, 130, 246, 0.15); border-color: var(--accent-blue); }
+        .stock-symbol { font-weight: bold; font-size: 0.9rem; }
+        .stock-price { text-align: right; font-size: 0.85rem; }
+        .badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; font-weight: bold; }
+        .badge-bull { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
+        .badge-bear { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+
+        /* Canvas Chart Area */
+        .chart-area { display: flex; flex-direction: column; background: var(--bg-dark); }
+        .chart-toolbar { padding: 10px; border-bottom: 1px solid var(--border-color); display: flex; gap: 10px; align-items: center; }
+        .canvas-container { flex: 1; position: relative; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        /* Backend Position Manager & Order Execution */
+        .trade-card { background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+        .trade-title { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; }
+        .metric-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.85rem; }
+        .metric-value { font-weight: bold; }
+        
+        .btn { width: 100%; padding: 10px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 5px; transition: 0.2s; }
+        .btn-buy { background: var(--accent-green); color: white; }
+        .btn-buy:hover { opacity: 0.9; }
+        .btn-sell { background: var(--accent-red); color: white; }
+        .btn-sell:hover { opacity: 0.9; }
+    </style>
+</head>
+<body>
+
+    <!-- Header / Market Breadth Dashboard -->
+    <header>
+        <div class="logo">⚡ Nifty ORB 1M Command Center</div>
+        <div class="breadth-bar">
+            <span>Market Breadth (Nifty 500):</span>
+            <span class="advances">▲ Advances: 342</span>
+            <span class="declines">▼ Declines: 158</span>
+            <span>A/D Ratio: <strong>2.16</strong></span>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Panel 1: Pre-Market & ORB Scanner -->
+        <div class="panel">
+            <div class="panel-header">
+                <span>1M ORB Scanner</span>
+                <span style="font-size: 0.75rem; color: var(--accent-green);">● LIVE</span>
+            </div>
+            <div class="panel-content">
+                <div class="select-group">
+                    <select id="indexSelect">
+                        <option value="NIFTY50">Nifty 50</option>
+                        <option value="NIFTY200">Nifty 200</option>
+                        <option value="NIFTY500" selected>Nifty 500</option>
+                    </select>
+                </div>
+                <div id="scannerList">
+                    <!-- Dynamic Signals will render here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel 2: Live HTML5 Canvas Chart -->
+        <div class="chart-area">
+            <div class="chart-toolbar">
+                <strong id="selectedStockTitle">RELIANCE (1 Min Chart)</strong>
+                <span class="badge badge-bull" id="orbStatus">1M ORB Breakout</span>
+            </div>
+            <div class="canvas-container">
+                <canvas id="mainChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Panel 3: Position Backend & Dynamic Trailing SL -->
+        <div class="panel" style="border-right: none; border-left: 1px solid var(--border-color);">
+            <div class="panel-header">Trade Backend Manager</div>
+            <div class="panel-content">
+                <div class="trade-card">
+                    <div class="trade-title">RISK & POSITION SIZER</div>
+                    <div class="metric-row"><span>Account Capital:</span> <span class="metric-value">₹5,00,000</span></div>
+                    <div class="metric-row"><span>Risk per Trade (1%):</span> <span class="metric-value">₹5,000</span></div>
+                    <div class="metric-row"><span>Calculated Qty:</span> <span class="metric-value" id="calcQty">180 Shares</span></div>
+                </div>
+
+                <div class="trade-card" style="border-color: var(--accent-blue);">
+                    <div class="trade-title" style="color: var(--accent-blue);">LIVE POSITION & TRAILING SL</div>
+                    <div class="metric-row"><span>Entry Price:</span> <span class="metric-value" id="entryPrice">₹2,450.00</span></div>
+                    <div class="metric-row"><span>Trailing Stop Loss:</span> <span class="metric-value" style="color: var(--accent-red);" id="trailingSL">₹2,438.50</span></div>
+                    <div class="metric-row"><span>Target 1 (1.5R):</span> <span class="metric-value" style="color: var(--accent-green);" id="target1">₹2,467.25</span></div>
+                    <div class="metric-row"><span>Target 2 (3.0R):</span> <span class="metric-value" style="color: var(--accent-green);" id="target2">₹2,484.50</span></div>
+                    <div class="metric-row" style="margin-top: 10px; font-size: 1rem;">
+                        <span>Unrealized P&L:</span> 
+                        <span class="metric-value" style="color: var(--accent-green);" id="livePnL">+₹2,250 (+0.9%)</span>
+                    </div>
+                </div>
+
+                <button class="btn btn-buy" onclick="triggerTrade('BUY')">Execute Buy Order</button>
+                <button class="btn btn-sell" style="margin-top: 8px;" onclick="triggerTrade('EXIT')">Exit Position Now</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Interactive Canvas Charting System
+        const canvas = document.getElementById('mainChart');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            drawChart();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // Dummy Candle Data for 1-Minute Chart
+        let candles = [
+            { open: 2440, high: 2448, low: 2438, close: 2445 },
+            { open: 2445, high: 2452, low: 2442, close: 2450 },
+            { open: 2450, high: 2458, low: 2448, close: 2456 },
+            { open: 2456, high: 2462, low: 2453, close: 2460 },
+            { open: 2460, high: 2468, low: 2458, close: 2465 }
+        ];
+
+        function drawChart() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const padding = 40;
+            const width = canvas.width - padding * 2;
+            const height = canvas.height - padding * 2;
+            
+            const candleWidth = width / candles.length - 15;
+            
+            // Find High/Low
+            let minPrice = Math.min(...candles.map(c => c.low));
+            let maxPrice = Math.max(...candles.map(c => c.high));
+
+            candles.forEach((c, index) => {
+                const x = padding + index * (candleWidth + 15) + 20;
+                const openY = canvas.height - padding - ((c.open - minPrice) / (maxPrice - minPrice)) * height;
+                const closeY = canvas.height - padding - ((c.close - minPrice) / (maxPrice - minPrice)) * height;
+                const highY = canvas.height - padding - ((c.high - minPrice) / (maxPrice - minPrice)) * height;
+                const lowY = canvas.height - padding - ((c.low - minPrice) / (maxPrice - minPrice)) * height;
+
+                const isBull = c.close >= c.open;
+                ctx.strokeStyle = isBull ? '#22c55e' : '#ef4444';
+                ctx.fillStyle = isBull ? '#22c55e' : '#ef4444';
+
+                // Wick
+                ctx.beginPath();
+                ctx.moveTo(x + candleWidth / 2, highY);
+                ctx.lineTo(x + candleWidth / 2, lowY);
+                ctx.stroke();
+
+                // Body
+                ctx.fillRect(x, Math.min(openY, closeY), candleWidth, Math.max(Math.abs(closeY - openY), 2));
+            });
+        }
+
+        // Initialize Mock Scanner Signals
+        const stocks = [
+            { symbol: 'RELIANCE', price: '₹2,465.00', change: '+1.2%', type: 'BULL' },
+            { symbol: 'TATAMOTORS', price: '₹985.50', change: '+2.4%', type: 'BULL' },
+            { symbol: 'INFY', price: '₹1,510.20', change: '-0.8%', type: 'BEAR' },
+            { symbol: 'HDFCBANK', price: '₹1,640.00', change: '+0.5%', type: 'BULL' },
+            { symbol: 'ICICIBANK', price: '₹1,120.30', change: '+1.1%', type: 'BULL' }
+        ];
+
+        function renderScanner() {
+            const list = document.getElementById('scannerList');
+            list.innerHTML = stocks.map(s => `
+                <div class="stock-item ${s.symbol === 'RELIANCE' ? 'active' : ''}">
+                    <div>
+                        <div class="stock-symbol">${s.symbol}</div>
+                        <span class="badge ${s.type === 'BULL' ? 'badge-bull' : 'badge-bear'}">1M ${s.type} ORB</span>
+                    </div>
+                    <div class="stock-price">
+                        <div>${s.price}</div>
+                        <div style="color: ${s.type === 'BULL' ? 'var(--accent-green)' : 'var(--accent-red)'}">${s.change}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function triggerTrade(action) {
+            alert(action + " Order Sent to Broker API Interface!");
+        }
+
+        // Initial Setup
+        setTimeout(() => {
+            resizeCanvas();
+            renderScanner();
+        }, 100);
+    </script>
+</body>
+</html>
